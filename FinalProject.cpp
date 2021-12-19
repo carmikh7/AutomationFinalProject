@@ -226,6 +226,8 @@ vector<int> findConflict(bool **edges, vector<float> centersX)
 
     Q.push(0);
     d[0] = 0;
+
+    bool found = false;
     
     while (!Q.empty())
     {
@@ -237,10 +239,12 @@ vector<int> findConflict(bool **edges, vector<float> centersX)
             if(edges[j][adjNode] == true)
             {
                 k = adjNode;
+
                 if(d[k] >= 0)
                 {
                     if(d[k] == d[j])
                     {
+                        found = true;
                         break;
                     }
                 }
@@ -250,6 +254,10 @@ vector<int> findConflict(bool **edges, vector<float> centersX)
                     Q.push(k);
                 }
             }
+        }
+        if(found == true)
+        {
+            break;
         }
     }
 
@@ -269,88 +277,93 @@ vector<int> findConflict(bool **edges, vector<float> centersX)
     int s = 0;
     map <int,int>::iterator check;
 
-    while (!Q2.empty())
+    if(found == true)
     {
-        if(!L.empty())
+        while (!Q2.empty())
         {
-            break;
-        }
-        r = Q2.front();
-        Q2.pop();
-
-       for (int adjNode = 0; adjNode < centersX.size() ; adjNode++)
-        {
-            if(edges[r][adjNode] == true)
+            if(!L.empty())
             {
-                s = adjNode;
+                break;
+            }
+            r = Q2.front();
+            Q2.pop();
 
-                if((d[s] + 1) == d[r] )
+        for (int adjNode = 0; adjNode < centersX.size() ; adjNode++)
+            {
+                if(edges[r][adjNode] == true)
                 {
-                    if(visited[s] == true)
-                    {
-                        int f;
-                        L.push_front(s);
-                        L.push_back(r);
+                    s = adjNode;
 
-                        f = F[r];
-                        while (f != -1)
+                    if((d[s] + 1) == d[r] )
+                    {
+                        if(visited[s] == true)
                         {
-                            L.push_back(f);
-                            f = F[f];
+                            int f;
+                            L.push_front(s);
+                            L.push_back(r);
+
+                            f = F[r];
+                            while (f != -1)
+                            {
+                                L.push_back(f);
+                                f = F[f];
+                            }
+                            f = F[s];
+                            while (f != -1)
+                            {
+                                L.push_back(f);
+                                f = F[f];
+                            }
+                            break;
                         }
-                        f = F[s];
-                        while (f != -1)
+
+                        check = F.find(s);
+                        if (check == F.end())
                         {
-                            L.push_back(f);
-                            f = F[f];
+                            F.insert(pair<int,int>(s, -1));
                         }
-                        break;
+
+                        F[s] = (r);
+                        visited[s] = true;
+                        Q2.push(s);
                     }
 
-                    check = F.find(s);
-                    if (check == F.end())
-                    {
-                        F.insert(pair<int,int>(s, -1));
-                    }
-
-                    F[s] = (r);
-                    visited[s] = true;
-                    Q2.push(s);
                 }
-
             }
         }
-    }
 
-    int fd = 0;
+        int fd = 0;
 
-    for(auto i = L.begin();i != L.end(); ++i)
-    {
-        for(int j = 0; j< confNodes.size(); ++j)
+        for(auto i = L.begin();i != L.end(); ++i)
         {
-            if(confNodes[j] == *i)
+            for(int j = 0; j< confNodes.size(); ++j)
             {
-                fd = 1;
+                if(confNodes[j] == *i)
+                {
+                    fd = 1;
+                }
+            }
+            if(fd == 0)
+            {
+                confNodes.push_back(*i);
             }
         }
-        if(fd == 0)
-        {
-            confNodes.push_back(*i);
-        }
+
     }
 
     return confNodes;
+
 }
 
 pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int node1,int node2,int node3,int vertX,int vertY , map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
 {
-    cout << "************* \n";
+    cout << "\n************* \n";
     cout << "TRYING: \n";
     cout << "current:" << node1 << "\n";
     cout << "first:" << node2 << "\n";
     cout << "second:" << node3 << "\n";
     cout << "(" << vertX << ", ";
-    cout << vertY << ") \n\n";
+    cout << vertY << ") \n";
     cout << "************* \n\n";
 
     bool found = false;
@@ -466,14 +479,6 @@ map <string, vector<int>> findNodesToSplit(vector<int> confNodes, bool **edges, 
                     float dist2 = sqrt( pow( abs(Y22 - vertY), 2) + pow(abs(X22 - vertX), 2) );
                     dist = min(dist1,dist2) ;
 
-                    /*
-                    cout << "current:" << node1 << "\n";
-                    cout << "first:" << node2 << "\n";
-                    cout << "second:" << node3 << "\n";
-                    cout << "(" << vertX << ", ";
-                    cout << vertY << ") \n\n";
-                    */
-
                     if(minDistance<dist)
                     {
                         conflicts["node1"].push_back(node1);
@@ -481,7 +486,6 @@ map <string, vector<int>> findNodesToSplit(vector<int> confNodes, bool **edges, 
                         conflicts["node3"].push_back(node3);
                         conflicts["vertX"].push_back(vertX);
                         conflicts["vertY"].push_back(vertY);
-                        //partitionTest(node1,node2,node3,vertX,vertY,shapeMapX,shapeMapY);
                     }
                 }
 
@@ -582,11 +586,6 @@ vector<int> assignMask(bool **edges, string *grid, int gridSize, map <int, vecto
         }
     }
 
-    for(int m = 0; m < masks.size(); ++m)
-    {
-        cout << masks[m] << "\n";
-    }
-
     for(int i = 0; i < shapeMapX.size(); ++i)
     {
         for(int j = 0; j < shapeMapX[i].size(); ++j)
@@ -630,8 +629,6 @@ tuple<map <int, vector<int>>, map <int, vector<int>>, bool>  iterateLoop (float 
         }
     }
 
-    //vector<float> centersX; // holds Y coordinate of shape center point
-    //vector<float> centersY; // holds X coordinate of shape center point
 
     findEdges(distances, edges, closestCoordsX, closestCoordsY, minDistance, shapeMapX, shapeMapY);
 
@@ -656,17 +653,6 @@ tuple<map <int, vector<int>>, map <int, vector<int>>, bool>  iterateLoop (float 
     {
         return iterationReturn;
     }
-
-    for(int c = 0; c < conflicts["node1"].size();c++) // for each solution to conflict
-    {
-        cout << "current:" << conflicts["node1"][c] << "\n";
-        cout << "first:" << conflicts["node2"][c] << "\n";
-        cout << "second:" << conflicts["node3"][c] << "\n";
-        cout << "(" << conflicts["vertX"][c] << ", ";
-        cout << conflicts["vertY"][c] << ") \n\n";
-    }
-
-
 
     for(int c = 0; c < conflicts["node1"].size();c++) // for each solution to conflict
     {
@@ -803,10 +789,23 @@ int main()
     findEdges(distances2, edges2, closestCoordsX2, closestCoordsY2, minDistance, shapeMapX2, shapeMapY2);
     tie(centersX2,centersY2) = findCenters(shapeMapX2, shapeMapY2);
 
-    cout << "Pass? " << get<2>(iterationReturn) << "\n\n";
+    cout << "Pass? ";
+    if(get<2>(iterationReturn))
+    {
+        cout << "YES" << "\n\n";
+        masks = assignMask(edges2,grid,gridSize,shapeMapX2,shapeMapY2);
+        for (int i = 0; i < (sizeof(grid)/sizeof(grid[0])); i++)
+        {
+            std::cout << grid[i] << "\n";
+        }
+        cout<<"\n\n";
+    } else {
+        cout << "FAIL - cannot clear conflicts";
+    }
 
     plotConflicts(closestCoordsX2, closestCoordsY2, numOfVert2,centersX2, centersY2,edges2);
 
+    /*
     for (int row = 0; row < numOfVert2; row++)    //for each row
     {
         for (int col = 0 ; col < numOfVert2; col++)   //for each column
@@ -817,14 +816,6 @@ int main()
     }
     cout << "\n\n";
 
-    masks = assignMask(edges2,grid,gridSize,shapeMapX2,shapeMapY2);
-
-    for (int i = 0; i < (sizeof(grid)/sizeof(grid[0])); i++)
-    {
-        std::cout << grid[i] << "\n";
-    }
-
-    /*
     int shape = shapeMapX.size();
     vector<int> X;
     vector<int> Y;
