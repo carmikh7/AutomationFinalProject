@@ -81,7 +81,9 @@
     "vector": "cpp",
     "numeric": "cpp",
     "__tree": "cpp",
-    "map": "cpp"
+    "map": "cpp",
+    "deque": "cpp",
+    "queue": "cpp"
   },
   "C_Cpp.errorSquiggles": "Disabled"
 }
