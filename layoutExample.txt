@@ -1,0 +1,31 @@
+Example from HW1 - passes
+
+__XXX_XXX____
+_____________
+_XXXX_XXX_XXX
+____________X
+XXXX________X
+X___________X
+X_XXXXXXXX_XX
+__X__________
+__X____X_____
+__X____X_____
+_____________
+__XXXXX______
+_____________
+
+Complicated shape - fails
+
+_XXXX_XXX_____
+____XXX_______
+__XXX_XXX_XXX_
+_______X____X_
+X____XXX______
+X___________X_
+X_XXXXXXXX_XXX
+__X___________
+__X____XXX____
+__XXXXXX_____X
+______X______X
+__XXXXX______X
+_____________X

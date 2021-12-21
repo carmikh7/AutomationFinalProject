@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <math.h>
 #include "matplotlibcpp.h"
 #include <vector>
@@ -8,8 +9,409 @@
 using namespace std;
 namespace plt = matplotlibcpp;
 
-pair<map <int, vector<int>>, map <int, vector<int>>> sectionShapes(string *grid, int gridSize, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
+tuple<map <int, vector<int>>, map <int, vector<int>>, vector<string>> iterCol (int node, int corrRow, int corrCol,vector<string> grid, int row, int col, map <int, vector<int>> shapeMapX, map <int, vector<int>> shapeMapY);
+tuple<map <int, vector<int>>, map <int, vector<int>>, vector<string>> iterRow (int direction,int node, int corrRow, int corrCol,vector<string> grid, int row, int col, map <int, vector<int>> shapeMapX, map <int, vector<int>> shapeMapY);
+pair<map <int, vector<int>>, map <int, vector<int>>> sectionShapes(vector<string> grid, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
+void findEdges(float **distances, bool **edges, int **closestCoordsX, int **closestCoordsY, float minDistance, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
+pair<vector<float> , vector<float> > findCenters(map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
+vector<int> findConflict(bool **edges, vector<float> centersX);
+pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int node1,int node2,int node3,int vertX,int vertY , map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
+map <string, vector<int>> findNodesToSplit(vector<int> confNodes, bool **edges, float minDistance, int **closestCoordsX, int **closestCoordsY, map <int, vector<int>> shapeMapX, map <int, vector<int>> shapeMapY);
+void plotConflicts(int **closestCoordsX, int**closestCoordsY, int numOfVert, vector<float> centersX, vector<float> centersY, bool **edges);
+pair<vector<int>, vector<string>> assignMask(bool **edges, vector<string> grid, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
+tuple<map <int, vector<int>>, map <int, vector<int>>, bool>  iterateLoop (float minDistance, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
+
+int main()
 {
+    string line;
+    vector<string> grid;
+    ifstream layoutFile;
+    layoutFile.open("layout.txt");
+
+    if (!layoutFile) 
+    {
+        cerr << "Unable to open file datafile.txt";
+        return 0;   // call system to stop
+    }else{
+        while (getline(layoutFile,line)) {
+            grid.push_back(line);
+        }
+    }
+
+    layoutFile.close();
+    float minDistance = 2.80;
+
+    ////////////////////////////////////////////////////////////////
+    // GRAPH CONSTRUCTION
+
+    // SECTION THE SHAPES USING LETTERS TO IDENTIFY THEM
+
+    ////////////////////////////////////////////////////////////////////////////
+    // CALCULATE SHORTEST DISTANCES TO FIND EDGES 
+
+    map <int, vector<int>> shapeMapX;
+    map <int, vector<int>> shapeMapY;
+
+    tie(shapeMapX,shapeMapY) = sectionShapes(grid,shapeMapX,shapeMapY);
+
+    int numOfVert = shapeMapX.size();
+    float **distances;         // smallest distance between each shape
+    distances = new float *[numOfVert];
+    bool **edges;
+    edges = new bool *[numOfVert];
+    int **closestCoordsX;    // holds X coordinate of closest distance point
+    closestCoordsX = new int *[numOfVert];
+    int **closestCoordsY;    // holds Y coordinate of closest distance point
+    closestCoordsY = new int *[numOfVert];
+    map <int, vector<int>> shapeMapX2;
+    map <int, vector<int>> shapeMapY2;
+
+    vector<float> centersX; // holds Y coordinate of shape center point
+    vector<float> centersY; // holds X coordinate of shape center point
+    vector<int> confNodes;
+    tuple<map <int, vector<int>>,map <int, vector<int>>,bool> iterationReturn  (shapeMapX, shapeMapY,false);
+
+
+    // initialize array values
+
+    for (int row = 0; row < numOfVert; row++)    
+    {
+        distances[row] =  new float [numOfVert];
+        edges[row] = new bool [numOfVert];
+        closestCoordsX[row] = new int [numOfVert];
+        closestCoordsY[row] = new int [numOfVert];
+        for (int col = 0; col < numOfVert; col++)
+        {
+            distances[row][col] = numOfVert * 2;
+            edges[row][col] = false;
+            closestCoordsX[row][col] = 0;
+            closestCoordsY[row][col] = 0;
+        }
+    }
+
+    findEdges(distances, edges, closestCoordsX, closestCoordsY, minDistance, shapeMapX, shapeMapY);
+    tie(centersX,centersY) = findCenters(shapeMapX, shapeMapY);
+
+    confNodes = findConflict(edges, centersX);
+    map <string, vector<int>> conflicts = findNodesToSplit(confNodes, edges, minDistance, closestCoordsX, closestCoordsY, shapeMapX, shapeMapY);
+
+    for(int c = 0; c < conflicts["node1"].size();c++) // for each solution to conflict
+    {
+        tie(shapeMapX2,shapeMapY2) = nodeSplitting(conflicts["node1"][c],conflicts["node2"][c],conflicts["node3"][c],conflicts["vertX"][c],conflicts["vertY"][c],shapeMapX,shapeMapY);
+        iterationReturn = iterateLoop(minDistance,shapeMapX2, shapeMapY2);
+        if(get<2>(iterationReturn) == true)
+        {
+            shapeMapX2 = get<0>(iterationReturn);
+            shapeMapY2 = get<1>(iterationReturn);
+            break;
+        }
+    }
+
+
+    int numOfVert2 = shapeMapX2.size();
+    float **distances2;         // smallest distance between each shape
+    distances2 = new float *[numOfVert2];
+    bool **edges2;
+    edges2 = new bool *[numOfVert2];
+    int **closestCoordsX2;    // holds X coordinate of closest distance point
+    closestCoordsX2 = new int *[numOfVert2];
+    int **closestCoordsY2;    // holds Y coordinate of closest distance point
+    closestCoordsY2 = new int *[numOfVert2];
+    vector<float> centersX2; // holds Y coordinate of shape center point
+    vector<float> centersY2; // holds X coordinate of shape center point
+    vector<int> masks; // holds X coordinate of shape center point
+
+    for (int row = 0; row < numOfVert2; row++)    
+    {
+        distances2[row] =  new float [numOfVert2];
+        edges2[row] = new bool [numOfVert2];
+        closestCoordsX2[row] = new int [numOfVert2];
+        closestCoordsY2[row] = new int [numOfVert2];
+        for (int col = 0; col < numOfVert2; col++)
+        {
+            distances2[row][col] = numOfVert2 * 2;
+            edges2[row][col] = false;
+            closestCoordsX2[row][col] = 0;
+            closestCoordsY2[row][col] = 0;
+        }
+    }
+
+    findEdges(distances2, edges2, closestCoordsX2, closestCoordsY2, minDistance, shapeMapX2, shapeMapY2);
+    tie(centersX2,centersY2) = findCenters(shapeMapX2, shapeMapY2);
+
+    cout << "Pass? ";
+    if(get<2>(iterationReturn))
+    {
+        cout << "YES" << "\n\n";
+        tie(masks,grid)= assignMask(edges2,grid,shapeMapX2,shapeMapY2);
+    } else {
+        cout << "FAIL - cannot clear conflicts \n\n";
+    }
+
+
+    for (int i = 0; i < grid.size(); i++)
+    {
+        std::cout << grid[i] << "\n";
+    }
+    cout<<"\n\n";
+
+    plotConflicts(closestCoordsX2, closestCoordsY2, numOfVert2,centersX2, centersY2,edges2);
+
+
+/*
+    for (int row = 0; row < numOfVert2; row++)    //for each row
+    {
+        for (int col = 0 ; col < numOfVert2; col++)   //for each column
+        {
+            cout << edges2[row][col] << " , ";
+        }
+        cout << '\n';
+    }
+    cout << "\n\n";
+
+    int shape = shapeMapX.size();
+    vector<int> X;
+    vector<int> Y;
+    
+    for(int i = 0 ; i < shape ; i++)
+    {
+        X = shapeMapX[i];
+        Y = shapeMapY[i];
+
+        for (int j = 0 ; j < X.size() ; j++)
+        {
+            cout << '(' << X[j] << ", " << Y[j] << ") \n";
+        }
+        cout << "\n";
+    }
+
+    cout << "\n\n";
+
+    
+    for(int i = 0 ; i < shapeMapX2.size() ; i++)
+    {
+        for (int j = 0 ; j < shapeMapX2[i].size() ; j++)
+        {
+            cout << '(' << shapeMapX2[i][j] << ", " << shapeMapY2[i][j] << ") \n";
+        }
+        cout << "\n";
+    }
+
+    cout << "\n\n";
+
+    for (int row = 0; row < shape; row++)    //for each row
+    {
+        for (int col = 0 ; col < shape; col++)   //for each column
+        {
+            cout << edges[row][col] << " , ";
+        }
+        cout << '\n';
+    }
+
+    
+
+    for(int i = 0; i < conflicts["node1"].size(); i++)
+    {
+        cout << '(' << conflicts["node1"][i] << ", ";
+        cout << conflicts["node2"][i] << ", ";
+        cout << conflicts["node3"][i] << ") \n";
+        cout << '(' << conflicts["vertX"][i] << ", ";
+        cout << conflicts["vertY"][i] << ") \n\n";
+    }
+
+    
+    cout << "\n\n";
+
+    for (int i = 0 ; i < centersX.size() ; i++)
+    {
+        cout << centersX[i] << '\n';
+    }
+
+    cout << "\n\n";
+
+    for (int i = 0 ; i < centersY.size() ; i++)
+    {
+        cout << centersY[i] << '\n';
+    }
+
+    for (int i = 0 ; i < centersX.size() ; i++)
+    {
+        cout << centersX[i] << '\n';
+    }
+
+
+    for (int row = 0; row < confNodes.size(); row++)    //for each row
+    {
+            cout << confNodes[row]<< ", ";
+        
+    }
+    cout << "\n\n";
+*/
+
+
+    return 0;
+}
+
+
+tuple<map <int, vector<int>>, map <int, vector<int>>, vector<string>> iterCol (int node, int corrRow, int corrCol,vector<string> grid, int row, int col, map <int, vector<int>> shapeMapX, map <int, vector<int>> shapeMapY)
+{
+    tuple<map <int, vector<int>>,map <int, vector<int>>,vector<string>> shapeItReturn (shapeMapX, shapeMapY,grid);
+    map <int, vector<int>>::iterator c;
+    char nextCol2;
+    int corrCol2 = corrCol + 1;
+    int corrRow2;
+
+    if((col + corrCol2) < grid[row].size())
+    {
+        nextCol2 = grid[row+corrRow][col+corrCol2];
+    }
+    while(nextCol2 == 'X' && (col + corrCol2) < grid[row].size())   // check for connections to the right
+    {
+        grid[row+corrRow][col+corrCol2] = 'a';
+
+        c = shapeMapX.find(node);
+        if (c == shapeMapX.end()) // if key has not been created, add an empty vector
+        {
+            shapeMapX.insert(pair<int,vector<int> >(node, vector<int>()));
+            shapeMapY.insert(pair<int,vector<int> >(node, vector<int>()));
+        }
+        shapeMapX[node].push_back(col+corrCol2);
+        shapeMapY[node].push_back(row+corrRow);
+
+        if (corrCol2 > 0)    // if we are 2 away from original row, start branching off
+        {
+            int direction = 1;
+            corrRow2 = corrRow + 1;
+            shapeItReturn = iterRow(direction, node, corrRow2, corrCol2,grid,row,col,shapeMapX,shapeMapY);
+            shapeMapX = get<0>(shapeItReturn);
+            shapeMapY = get<1>(shapeItReturn);
+            grid = get<2>(shapeItReturn);
+
+            direction = -1;
+            corrRow2 = corrRow - 1;
+            shapeItReturn = iterRow(direction, node, corrRow2, corrCol2,grid,row,col,shapeMapX,shapeMapY);
+            shapeMapX = get<0>(shapeItReturn);
+            shapeMapY = get<1>(shapeItReturn);
+            grid = get<2>(shapeItReturn);
+        }
+
+        corrCol2++;
+
+        if((col + corrCol2) < grid[row].size())
+        {
+            nextCol2 = grid[row+corrRow][col+corrCol2];
+        }
+    }
+
+    corrCol2 = corrCol - 1;
+    if((col + corrCol2)  >= 0)
+    {
+        nextCol2 = grid[row+corrRow][col+corrCol2];
+    }
+    while(nextCol2 == 'X' && (col + corrCol2) >= 0)     // check for connection to the left
+    {
+        grid[row+corrRow][col+corrCol2] = 'a';
+
+        c = shapeMapX.find(node);
+        if (c == shapeMapX.end()) // if key has not been created, add an empty vector
+        {
+            shapeMapX.insert(pair<int,vector<int> >(node, vector<int>()));
+            shapeMapY.insert(pair<int,vector<int> >(node, vector<int>()));
+        }
+        shapeMapX[node].push_back(col+corrCol2);
+        shapeMapY[node].push_back(row+corrRow);
+
+        if (corrCol2 > 0)    // if we are 2 away from original row, start branching off
+        {
+            int direction = 1;
+            corrRow2 = corrRow + 1;
+            shapeItReturn = iterRow(direction, node, corrRow2, corrCol2,grid,row,col,shapeMapX,shapeMapY);
+            shapeMapX = get<0>(shapeItReturn);
+            shapeMapY = get<1>(shapeItReturn);
+            grid = get<2>(shapeItReturn);
+
+            direction = -1;
+            corrRow2 = corrRow - 1;
+            shapeItReturn = iterRow(direction, node, corrRow2, corrCol2,grid,row,col,shapeMapX,shapeMapY);
+            shapeMapX = get<0>(shapeItReturn);
+            shapeMapY = get<1>(shapeItReturn);
+            grid = get<2>(shapeItReturn);
+        }
+
+        corrCol2--;
+
+        if((col + corrCol2)  >= 0)
+        {
+            nextCol2 = grid[row+corrRow][col+corrCol2];
+        }
+    }
+    get<0>(shapeItReturn) = shapeMapX;
+    get<1>(shapeItReturn) = shapeMapY;
+    get<2>(shapeItReturn) = grid;
+
+    return shapeItReturn;
+
+}
+
+tuple<map <int, vector<int>>, map <int, vector<int>>, vector<string>> iterRow (int direction, int node, int corrRow, int corrCol,vector<string> grid, int row, int col, map <int, vector<int>> shapeMapX, map <int, vector<int>> shapeMapY)
+{
+    tuple<map <int, vector<int>>,map <int, vector<int>>,vector<string> >shapeItReturn (shapeMapX, shapeMapY,grid);
+    char nextRow;
+    int corrRow2 = corrRow;
+    map <int, vector<int>>::iterator c;
+    
+    if ((row + corrRow) < grid.size())
+    {
+        nextRow = grid[row+corrRow][col+corrCol];
+    }
+
+    while ((row + corrRow) < grid.size() && nextRow == 'X') // follow the whole row to keep same letter if connected
+    {
+        grid[row+corrRow][col+corrCol] = 'a';
+
+        c = shapeMapX.find(node);
+        if (c == shapeMapX.end()) // if key has not been created, add an empty vector
+        {
+            shapeMapX.insert(pair<int,vector<int> >(node, vector<int>()));
+            shapeMapY.insert(pair<int,vector<int> >(node, vector<int>()));
+        }
+        shapeMapX[node].push_back(col+corrCol);
+        shapeMapY[node].push_back(row+corrRow);
+
+        if (corrRow > -1)    // if we are 2 away from original row, start branching off
+        {
+            shapeItReturn = iterCol(node, corrRow, corrCol,grid,row,col,shapeMapX,shapeMapY);
+            shapeMapX = get<0>(shapeItReturn);
+            shapeMapY = get<1>(shapeItReturn);
+            grid = get<2>(shapeItReturn);
+        }
+
+        if(direction == 1)
+        {
+            corrRow++;
+
+        } else {
+            corrRow--;
+        }
+
+        
+        if ((row + corrRow) < grid.size())
+        {
+            nextRow = grid[row+corrRow][col+corrCol];
+        }
+    }
+
+    get<0>(shapeItReturn) = shapeMapX;
+    get<1>(shapeItReturn) = shapeMapY;
+    get<2>(shapeItReturn) = grid;
+
+    return shapeItReturn;
+
+}
+
+pair<map <int, vector<int>>, map <int, vector<int>>> sectionShapes(vector<string> grid, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
+{
+    tuple<map <int, vector<int>>,map <int, vector<int>>,vector<string> >shapeItReturn (shapeMapX, shapeMapY,grid);
     int node = 0;
     char nextRow = '_';
     char nextCol = '_';
@@ -20,11 +422,10 @@ pair<map <int, vector<int>>, map <int, vector<int>>> sectionShapes(string *grid,
 
     map <int, vector<int>>::iterator c;
 
-    for (int row = 0; row < gridSize; row++)    //for each row
+    for (int row = 0; row < grid.size(); row++)    //for each row
     {
-        for (int col = 0 ; col < gridSize; col++)   //for each column
+        for (int col = 0 ; col < grid[row].size(); col++)   //for each column
         {         
-
             if (grid[row][col] == 'X')  // check if this section has a shape that has not been labeled yet
             {
                 corrCol = 0;
@@ -33,87 +434,23 @@ pair<map <int, vector<int>>, map <int, vector<int>>> sectionShapes(string *grid,
                 nextCol = grid[row][col];
                 nextRow = grid[row][col];
 
-                while ((col + corrCol) < gridSize && nextCol == 'X')    // follow the whole column to keep same letter if connected
+                while ((col + corrCol) < grid[row].size() && nextCol == 'X')    // follow the whole column to keep same letter if connected
                 {
-                    while ((row + corrRow) < gridSize && nextRow == 'X') // follow the whole row to keep same letter if connected
-                    {
-                        grid[row+corrRow][col+corrCol] = node;   // replace the X with the current label
+                    int direction = 1;
+                    shapeItReturn = iterRow(direction,node, corrRow, corrCol,grid,row,col,shapeMapX,shapeMapY);
+                    shapeMapX = get<0>(shapeItReturn);
+                    shapeMapY = get<1>(shapeItReturn);
+                    grid = get<2>(shapeItReturn);
 
-                        c = shapeMapX.find(node);
-                        if (c == shapeMapX.end()) // if key has not been created, add an empty vector
-                        {
-                            shapeMapX.insert(pair<int,vector<int> >(node, vector<int>()));
-                            shapeMapY.insert(pair<int,vector<int> >(node, vector<int>()));
-                        }
-                        shapeMapX[node].push_back(col+corrCol);
-                        shapeMapY[node].push_back(row+corrRow);
-
-                        corrRow++;
-
-                        if ((row + corrRow) < gridSize)
-                        {
-                            nextRow = grid[row+corrRow][col+corrCol];
-                        }
-
-                        if (corrRow > 1)    // if we are 2 away from original row, start branching off
-                        {
-                            corrCol2 = corrCol + 1;
-                            if((col + corrCol2) < gridSize)
-                            {
-                                nextCol2 = grid[row+corrRow][col+corrCol2];
-                            }
-                            while(nextCol2 == 'X' && (col + corrCol2) < gridSize)   // check for connections to the right
-                            {
-                                grid[row+corrRow][col+corrCol2] = node;
-
-                                c = shapeMapX.find(node);
-                                if (c == shapeMapX.end()) // if key has not been created, add an empty vector
-                                {
-                                    shapeMapX.insert(pair<int,vector<int> >(node, vector<int>()));
-                                    shapeMapY.insert(pair<int,vector<int> >(node, vector<int>()));
-                                }
-                                shapeMapX[node].push_back(col+corrCol2);
-                                shapeMapY[node].push_back(row+corrRow);
-
-                                corrCol2++;
-
-                                if((col + corrCol2) < gridSize)
-                                {
-                                    nextCol2 = grid[row+corrRow][col+corrCol2];
-                                }
-                            }
-
-                            corrCol2 = corrCol - 1;
-                            if((col + corrCol2)  >= 0)
-                            {
-                                nextCol2 = grid[row+corrRow][col+corrCol2];
-                            }
-                            while(nextCol2 == 'X' && (col + corrCol2) >= 0)     // check for connection to the left
-                            {
-                                grid[row+corrRow][col+corrCol2] = node;
-
-                                c = shapeMapX.find(node);
-                                if (c == shapeMapX.end()) // if key has not been created, add an empty vector
-                                {
-                                    shapeMapX.insert(pair<int,vector<int> >(node, vector<int>()));
-                                    shapeMapY.insert(pair<int,vector<int> >(node, vector<int>()));
-                                }
-                                shapeMapX[node].push_back(col+corrCol2);
-                                shapeMapY[node].push_back(row+corrRow);
-
-                                corrCol2++;
-
-                                if((col + corrCol2)  >= 0)
-                                {
-                                    nextCol2 = grid[row+corrRow][col+corrCol2];
-                                }
-                            }
-                        }
-                    }
+                    direction = -1;
+                    shapeItReturn = iterRow(direction,node, corrRow, corrCol,grid,row,col,shapeMapX,shapeMapY);
+                    shapeMapX = get<0>(shapeItReturn);
+                    shapeMapY = get<1>(shapeItReturn);
+                    grid = get<2>(shapeItReturn);
 
                     corrCol++;
                     corrRow = 0;
-                    if ((col + corrCol) < gridSize)
+                    if ((col + corrCol) < grid[row].size())
                     {
                         nextCol = grid[row+corrRow][col+corrCol];
                     }
@@ -548,7 +885,7 @@ void plotConflicts(int **closestCoordsX, int**closestCoordsY, int numOfVert, vec
     plt::show();
 }
 
-vector<int> assignMask(bool **edges, string *grid, int gridSize, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
+pair<vector<int>, vector<string>> assignMask(bool **edges, vector<string> grid, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
 {
     vector<int> masks(shapeMapX.size(),3);
     int color = 1;
@@ -593,13 +930,20 @@ vector<int> assignMask(bool **edges, string *grid, int gridSize, map <int, vecto
             x = shapeMapX[i][j];
             y = shapeMapY[i][j];
 
-            char c = '0' + masks[i];
+            char c;
+
+            if(masks[i] == 3)
+            {
+                 c = '0' + 0;
+            }else{
+                 c = '0' + masks[i];
+            }
 
             grid[y][x] = c;
         }
     }
 
-    return masks;
+    return make_pair(masks,grid);
 }
 
 tuple<map <int, vector<int>>, map <int, vector<int>>, bool>  iterateLoop (float minDistance, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
@@ -667,232 +1011,4 @@ tuple<map <int, vector<int>>, map <int, vector<int>>, bool>  iterateLoop (float 
     }
     return iterationReturn; 
     
-}
-
-int main()
-{
-    int gridSize = 13;
-    float minDistance = 2.80;
-
-    string grid[] = {
-        "__XXX_XXX____",
-        "_____________",
-        "_XXXX_XXX_XXX",
-        "____________X",
-        "XXXX________X",
-        "X___________X",
-        "X_XXXXXXXX_XX",
-        "__X__________",
-        "__X____X_____",
-        "__X____X_____",
-        "_____________",
-        "__XXXXX______",
-        "_____________"
-    };
-
-
-    ////////////////////////////////////////////////////////////////
-    // GRAPH CONSTRUCTION
-
-    // SECTION THE SHAPES USING LETTERS TO IDENTIFY THEM
-
-    ////////////////////////////////////////////////////////////////////////////
-    // CALCULATE SHORTEST DISTANCES TO FIND EDGES 
-
-    map <int, vector<int>> shapeMapX;
-    map <int, vector<int>> shapeMapY;
-
-    tie(shapeMapX,shapeMapY) = sectionShapes(grid,gridSize,shapeMapX,shapeMapY);
-
-    int numOfVert = shapeMapX.size();
-    float **distances;         // smallest distance between each shape
-    distances = new float *[numOfVert];
-    bool **edges;
-    edges = new bool *[numOfVert];
-    int **closestCoordsX;    // holds X coordinate of closest distance point
-    closestCoordsX = new int *[numOfVert];
-    int **closestCoordsY;    // holds Y coordinate of closest distance point
-    closestCoordsY = new int *[numOfVert];
-    map <int, vector<int>> shapeMapX2;
-    map <int, vector<int>> shapeMapY2;
-
-    vector<float> centersX; // holds Y coordinate of shape center point
-    vector<float> centersY; // holds X coordinate of shape center point
-    vector<int> confNodes;
-    tuple<map <int, vector<int>>,map <int, vector<int>>,bool> iterationReturn  (shapeMapX, shapeMapY,false);
-
-
-    // initialize array values
-
-    for (int row = 0; row < numOfVert; row++)    
-    {
-        distances[row] =  new float [numOfVert];
-        edges[row] = new bool [numOfVert];
-        closestCoordsX[row] = new int [numOfVert];
-        closestCoordsY[row] = new int [numOfVert];
-        for (int col = 0; col < numOfVert; col++)
-        {
-            distances[row][col] = numOfVert * 2;
-            edges[row][col] = false;
-            closestCoordsX[row][col] = 0;
-            closestCoordsY[row][col] = 0;
-        }
-    }
-
-    findEdges(distances, edges, closestCoordsX, closestCoordsY, minDistance, shapeMapX, shapeMapY);
-    tie(centersX,centersY) = findCenters(shapeMapX, shapeMapY);
-
-    confNodes = findConflict(edges, centersX);
-    map <string, vector<int>> conflicts = findNodesToSplit(confNodes, edges, minDistance, closestCoordsX, closestCoordsY, shapeMapX, shapeMapY);
-
-    for(int c = 0; c < conflicts["node1"].size();c++) // for each solution to conflict
-    {
-        tie(shapeMapX2,shapeMapY2) = nodeSplitting(conflicts["node1"][c],conflicts["node2"][c],conflicts["node3"][c],conflicts["vertX"][c],conflicts["vertY"][c],shapeMapX,shapeMapY);
-        iterationReturn = iterateLoop(minDistance,shapeMapX2, shapeMapY2);
-        if(get<2>(iterationReturn) == true)
-        {
-            shapeMapX2 = get<0>(iterationReturn);
-            shapeMapY2 = get<1>(iterationReturn);
-            break;
-        }
-    }
-
-
-    int numOfVert2 = shapeMapX2.size();
-    float **distances2;         // smallest distance between each shape
-    distances2 = new float *[numOfVert2];
-    bool **edges2;
-    edges2 = new bool *[numOfVert2];
-    int **closestCoordsX2;    // holds X coordinate of closest distance point
-    closestCoordsX2 = new int *[numOfVert2];
-    int **closestCoordsY2;    // holds Y coordinate of closest distance point
-    closestCoordsY2 = new int *[numOfVert2];
-    vector<float> centersX2; // holds Y coordinate of shape center point
-    vector<float> centersY2; // holds X coordinate of shape center point
-    vector<int> masks; // holds X coordinate of shape center point
-
-    for (int row = 0; row < numOfVert2; row++)    
-    {
-        distances2[row] =  new float [numOfVert2];
-        edges2[row] = new bool [numOfVert2];
-        closestCoordsX2[row] = new int [numOfVert2];
-        closestCoordsY2[row] = new int [numOfVert2];
-        for (int col = 0; col < numOfVert2; col++)
-        {
-            distances2[row][col] = numOfVert2 * 2;
-            edges2[row][col] = false;
-            closestCoordsX2[row][col] = 0;
-            closestCoordsY2[row][col] = 0;
-        }
-    }
-
-    findEdges(distances2, edges2, closestCoordsX2, closestCoordsY2, minDistance, shapeMapX2, shapeMapY2);
-    tie(centersX2,centersY2) = findCenters(shapeMapX2, shapeMapY2);
-
-    cout << "Pass? ";
-    if(get<2>(iterationReturn))
-    {
-        cout << "YES" << "\n\n";
-        masks = assignMask(edges2,grid,gridSize,shapeMapX2,shapeMapY2);
-        for (int i = 0; i < (sizeof(grid)/sizeof(grid[0])); i++)
-        {
-            std::cout << grid[i] << "\n";
-        }
-        cout<<"\n\n";
-    } else {
-        cout << "FAIL - cannot clear conflicts";
-    }
-
-    plotConflicts(closestCoordsX2, closestCoordsY2, numOfVert2,centersX2, centersY2,edges2);
-
-    /*
-    for (int row = 0; row < numOfVert2; row++)    //for each row
-    {
-        for (int col = 0 ; col < numOfVert2; col++)   //for each column
-        {
-            cout << edges2[row][col] << " , ";
-        }
-        cout << '\n';
-    }
-    cout << "\n\n";
-
-    int shape = shapeMapX.size();
-    vector<int> X;
-    vector<int> Y;
-    
-    for(int i = 0 ; i < shape ; i++)
-    {
-        X = shapeMapX[i];
-        Y = shapeMapY[i];
-
-        for (int j = 0 ; j < X.size() ; j++)
-        {
-            cout << '(' << X[j] << ", " << Y[j] << ") \n";
-        }
-        cout << "\n";
-    }
-
-    cout << "\n\n";
-
-    
-    for(int i = 0 ; i < shapeMapX2.size() ; i++)
-    {
-        for (int j = 0 ; j < shapeMapX2[i].size() ; j++)
-        {
-            cout << '(' << shapeMapX2[i][j] << ", " << shapeMapY2[i][j] << ") \n";
-        }
-        cout << "\n";
-    }
-
-    cout << "\n\n";
-
-    for (int row = 0; row < shape; row++)    //for each row
-    {
-        for (int col = 0 ; col < shape; col++)   //for each column
-        {
-            cout << edges[row][col] << " , ";
-        }
-        cout << '\n';
-    }
-
-    
-
-    for(int i = 0; i < conflicts["node1"].size(); i++)
-    {
-        cout << '(' << conflicts["node1"][i] << ", ";
-        cout << conflicts["node2"][i] << ", ";
-        cout << conflicts["node3"][i] << ") \n";
-        cout << '(' << conflicts["vertX"][i] << ", ";
-        cout << conflicts["vertY"][i] << ") \n\n";
-    }
-
-    
-    cout << "\n\n";
-
-    for (int i = 0 ; i < centersX.size() ; i++)
-    {
-        cout << centersX[i] << '\n';
-    }
-
-    cout << "\n\n";
-
-    for (int i = 0 ; i < centersY.size() ; i++)
-    {
-        cout << centersY[i] << '\n';
-    }
-
-    for (int i = 0 ; i < centersX.size() ; i++)
-    {
-        cout << centersX[i] << '\n';
-    }
-
-
-    for (int row = 0; row < confNodes.size(); row++)    //for each row
-    {
-            cout << confNodes[row]<< ", ";
-        
-    }
-    cout << "\n\n";
-*/
-    return 0;
 }

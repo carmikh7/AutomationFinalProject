@@ -83,7 +83,8 @@
     "__tree": "cpp",
     "map": "cpp",
     "deque": "cpp",
-    "queue": "cpp"
+    "queue": "cpp",
+    "filesystem": "cpp"
   },
   "C_Cpp.errorSquiggles": "Disabled"
 }
