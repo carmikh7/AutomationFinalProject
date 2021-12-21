@@ -51,8 +51,6 @@ int main()
     cout << "If you would like to change it, enter y \n";
     cout << "Otherwise, enter anything\n";
 
-    /*
-
     if(getline(cin, choice))
     {
         if(choice =="")
@@ -66,8 +64,6 @@ int main()
             minDistance = 2.80;
         }
     }
-    */
-    minDistance = 2.80;
 
 
     //////////////////////////////////////////////////////////////////////////
@@ -200,13 +196,19 @@ int main()
         cout << "Pass? " << "FAIL - cannot clear conflicts \n\n";
     }
     
+    ofstream outputFile;
+    outputFile.open ("output.txt");
 
     // print grid
     for (int i = 0; i < grid.size(); i++)
     {
         std::cout << grid[i] << "\n";
+        outputFile << grid[i] << "\n";
     }
     cout<<"\n\n";
+    outputFile.close();
+
+
 
     // print some values that may be interesting:
 /*
@@ -855,19 +857,6 @@ pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int **closest
 
     for (int Ind = 0 ; Ind < originalX.size() ; Ind++)
     {
-        /*
-        if(found)
-        {
-            eShapeMapX[newNode].push_back(originalX[Ind]);
-            eShapeMapY[newNode].push_back(originalY[Ind]);
-        }
-        if(originalX[Ind] == vertX && originalY[Ind] == vertY)
-        {
-            found = true;
-            eShapeMapX[node1].erase(eShapeMapX[node1].begin()+Ind+1,eShapeMapX[node1].end());
-            eShapeMapY[node1].erase(eShapeMapY[node1].begin()+Ind+1,eShapeMapY[node1].end());
-        }
-        */
 
        float d2 = sqrt( pow( abs(originalY[Ind] - closestY1), 2) + pow(abs(originalX[Ind] - closestX1), 2) );
        float d3 = sqrt( pow( abs(originalY[Ind] - closestY2), 2) + pow(abs(originalX[Ind] - closestX2), 2) );
