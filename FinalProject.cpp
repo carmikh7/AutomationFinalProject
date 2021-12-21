@@ -16,7 +16,7 @@ pair<map <int, vector<int>>, map <int, vector<int>>> sectionShapes(vector<string
 void findEdges(float **distances, bool **edges, int **closestCoordsX, int **closestCoordsY, float minDistance, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
 pair<vector<float> , vector<float> > findCenters(map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
 vector<int> findConflict(bool **edges, vector<float> centersX);
-pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int node1,int node2,int node3,int vertX,int vertY , map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
+pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int **closestCoordsX, int **closestCoordsY,int node1,int node2,int node3,int vertX,int vertY , map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
 map <string, vector<int>> findNodesToSplit(vector<int> confNodes, bool **edges, float minDistance, int **closestCoordsX, int **closestCoordsY, map <int, vector<int>> shapeMapX, map <int, vector<int>> shapeMapY);
 void plotConflicts(int **closestCoordsX, int**closestCoordsY, int numOfVert, vector<float> centersX, vector<float> centersY, bool **edges);
 pair<vector<int>, vector<string>> assignMask(bool **edges, vector<string> grid, map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY);
@@ -141,7 +141,7 @@ int main()
     for(int c = 0; c < conflicts["node1"].size();c++) // for each solution to conflict
     {
         // splits nodes at location identified by findNodesToSplit
-        tie(shapeMapX2,shapeMapY2) = nodeSplitting(conflicts["node1"][c],conflicts["node2"][c],conflicts["node3"][c],conflicts["vertX"][c],conflicts["vertY"][c],shapeMapX,shapeMapY);
+        tie(shapeMapX2,shapeMapY2) = nodeSplitting(closestCoordsX, closestCoordsY,conflicts["node1"][c],conflicts["node2"][c],conflicts["node3"][c],conflicts["vertX"][c],conflicts["vertY"][c],shapeMapX,shapeMapY);
         // iterative loop used when splitting nodes and checking for new conflicts
         iterationReturn = iterateLoop(minDistance,shapeMapX2, shapeMapY2);
         // if this split is a sucess, store it and break out of the cycle
@@ -824,7 +824,7 @@ map <string, vector<int>> findNodesToSplit(vector<int> confNodes, bool **edges, 
 }
 
 // splits nodes at location identified by findNodesToSplit
-pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int node1,int node2,int node3,int vertX,int vertY , map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
+pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int **closestCoordsX, int **closestCoordsY, int node1,int node2,int node3,int vertX,int vertY , map <int, vector<int>> shapeMapX , map <int, vector<int>> shapeMapY)
 {
     cout << "\n************* \n";
     cout << "TRYING: \n";
@@ -844,11 +844,18 @@ pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int node1,int
     map <int, vector<int>> eShapeMapX = shapeMapX;
     map <int, vector<int>> eShapeMapY = shapeMapY;
 
+    int closestX1 = closestCoordsX[node1][node2];
+    int closestX2 = closestCoordsX[node1][node3];
+    int closestY1 = closestCoordsY[node1][node2];
+    int closestY2 = closestCoordsY[node1][node3];
+
     eShapeMapX.insert(pair<int,vector<int> >(newNode, vector<int>()));
     eShapeMapY.insert(pair<int,vector<int> >(newNode, vector<int>()));
 
+
     for (int Ind = 0 ; Ind < originalX.size() ; Ind++)
     {
+        /*
         if(found)
         {
             eShapeMapX[newNode].push_back(originalX[Ind]);
@@ -860,6 +867,29 @@ pair<map <int, vector<int>>, map <int, vector<int>>> nodeSplitting(int node1,int
             eShapeMapX[node1].erase(eShapeMapX[node1].begin()+Ind+1,eShapeMapX[node1].end());
             eShapeMapY[node1].erase(eShapeMapY[node1].begin()+Ind+1,eShapeMapY[node1].end());
         }
+        */
+
+       float d2 = sqrt( pow( abs(originalY[Ind] - closestY1), 2) + pow(abs(originalX[Ind] - closestX1), 2) );
+       float d3 = sqrt( pow( abs(originalY[Ind] - closestY2), 2) + pow(abs(originalX[Ind] - closestX2), 2) );
+
+       if(d2 > d3)
+       {
+            eShapeMapX[newNode].push_back(originalX[Ind]);
+            eShapeMapY[newNode].push_back(originalY[Ind]);
+            for (int s = 0; eShapeMapX[node1].size() > s; s++)
+            {
+                if(eShapeMapX[node1][s] == originalX[Ind] && eShapeMapY[node1][s] == originalY[Ind])
+                {
+                    eShapeMapX[node1].erase(eShapeMapX[node1].begin()+s);
+                    eShapeMapY[node1].erase(eShapeMapY[node1].begin()+s);
+                    break;
+
+                }
+
+            }
+
+       }
+
     }
 
     return make_pair(eShapeMapX, eShapeMapY);
@@ -1065,7 +1095,7 @@ tuple<map <int, vector<int>>, map <int, vector<int>>, bool>  iterateLoop (float 
 
     for(int c = 0; c < conflicts["node1"].size();c++) // for each solution to conflict
     {
-        tie(shapeMapX,shapeMapY) = nodeSplitting(conflicts["node1"][c],conflicts["node2"][c],conflicts["node3"][c],conflicts["vertX"][c],conflicts["vertY"][c],shapeMapX,shapeMapY);
+        tie(shapeMapX,shapeMapY) = nodeSplitting(closestCoordsX, closestCoordsY,conflicts["node1"][c],conflicts["node2"][c],conflicts["node3"][c],conflicts["vertX"][c],conflicts["vertY"][c],shapeMapX,shapeMapY);
 
         iterationReturn = iterateLoop(minDistance,shapeMapX, shapeMapY);
         
